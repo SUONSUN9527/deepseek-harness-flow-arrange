@@ -43,13 +43,16 @@ function updateModeHint() {
 
 function setScreen(state) {
   const running = state.status === 'running';
-  sessionBar.hidden = !running;
-  launcher.style.display = running ? 'none' : 'flex';
-  if (running) {
-    el('bar-mode').textContent = MODE_LABELS[state.mode] || state.mode || '';
-    el('bar-workspace').textContent = state.workspace;
-    el('bar-url').textContent = state.url;
+  // 自动进入期间（含后端已 running 但会话页面尚未完成首帧渲染）显示全屏
+  // 加载页；主进程在视图真正挂载后清除 autoEntering 并广播。
+  const splashing = Boolean(state.autoEntering) && state.status !== 'error';
+  el('splash').hidden = !splashing;
+  if (splashing) {
+    el('splash-status').textContent = running ? '正在加载会话界面…' : '正在启动本地服务…';
   }
+  // 会话视图占满整窗：顶部状态栏永不显示（返回/浏览器打开走应用菜单）。
+  sessionBar.hidden = true;
+  launcher.style.display = running || splashing ? 'none' : 'flex';
 }
 
 function setBusy(busy, text) {

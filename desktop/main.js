@@ -10,7 +10,9 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const HEADER_HEIGHT = 44; // 会话模式下顶部状态栏高度，与 renderer/app.css 保持一致
+// 会话视图占满整窗（0 = 无顶部状态栏）。返回启动页与浏览器打开走应用菜单
+// （Alt 呼出）：返回启动页 Ctrl+Shift+H，在浏览器中打开见「应用」菜单。
+const HEADER_HEIGHT = 0;
 const BOOT_TIMEOUT_MS = 120_000;
 // 固定默认端口，按模式区分：内嵌页面的 localStorage 等浏览器侧状态按
 // 「来源(含端口)」隔离，端口既要跨启动稳定，也要让两种模式互不串扰。
@@ -121,6 +123,10 @@ function setStatus(status, error = '') {
   broadcast('server:status', publicState());
 }
 
+// 自动进入进行中：renderer 用它显示全屏加载页而不是启动表单，直到会话
+// 视图真正完成首次渲染（attachSessionView 的 did-finish-load）才清除。
+let autoEntering = false;
+
 function publicState() {
   return {
     status: server.status,
@@ -129,6 +135,7 @@ function publicState() {
     port: server.port,
     workspace: server.workspace,
     mode: server.mode,
+    autoEntering,
     logs: server.logs.slice(-200),
   };
 }
@@ -295,6 +302,7 @@ async function startServer(workspace, options = {}) {
 }
 
 function stopServer() {
+  autoEntering = false;
   const proc = server.proc;
   server.proc = null;
   if (proc && proc.exitCode === null) {
@@ -323,9 +331,23 @@ function attachSessionView(url) {
     shell.openExternal(target);
     return { action: 'deny' };
   });
-  mainWindow.contentView.addChildView(sessionView);
-  layoutSessionView();
-  sessionView.webContents.loadURL(url);
+  // 视图在页面完成首次加载后才盖到窗口上：未绘制的 WebContents 默认是白底，
+  // 立即挂载会在自动进入的加载页上闪一段白屏。20 秒兜底保证异常页面也可见。
+  const view = sessionView;
+  let attached = false;
+  const attachNow = () => {
+    if (attached || sessionView !== view || !mainWindow || mainWindow.isDestroyed()) return;
+    attached = true;
+    mainWindow.contentView.addChildView(view);
+    layoutSessionView();
+    if (autoEntering) {
+      autoEntering = false;
+      broadcast('server:status', publicState());
+    }
+  };
+  view.webContents.once('did-finish-load', attachNow);
+  setTimeout(attachNow, 20_000);
+  view.webContents.loadURL(url);
 }
 
 function detachSessionView() {
@@ -350,12 +372,15 @@ function createWindow() {
     title: 'DeepSeek Harness',
     icon: path.join(__dirname, 'app.ico'),
     autoHideMenuBar: true,
+    // 首帧渲染好再显示窗口，消除打开瞬间的空白闪烁。
+    show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
+  mainWindow.once('ready-to-show', () => { if (mainWindow) mainWindow.show(); });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.on('resize', layoutSessionView);
   mainWindow.on('maximize', layoutSessionView);
@@ -421,6 +446,33 @@ function registerIpc() {
   ipcMain.handle('shell:openPath', (_e, target) => shell.openPath(target));
 }
 
+// ---------- 自动进入：双击图标直达会话界面 ----------
+
+// 生命周期约定：双击图标 → 自动拉起（或复用已在跑的）后端并直接进入会话
+// 界面；关闭窗口 → window-all-closed 里的 stopServer 杀掉自己拉起的后端。
+// 上次工作区缺失、配置显式关闭（autoEnter: false）或启动失败时，回落到
+// 手动启动页，行为与旧版一致。
+async function autoEnter() {
+  const cfg = loadConfig();
+  if (cfg.autoEnter === false) return;
+  const workspace = cfg.lastWorkspace;
+  if (!workspace || !fs.existsSync(workspace)) {
+    pushLog('[desktop] 没有可用的上次工作区，停留在启动页');
+    return;
+  }
+  // 同步置位：renderer 初始化时通过 getState 读到它并显示加载页，
+  // 全程不出现启动表单；attachSessionView 在首帧渲染完成后清除。
+  autoEntering = true;
+  try {
+    await startServer(workspace, {});
+    attachSessionView(server.url);
+  } catch (err) {
+    autoEntering = false;
+    pushLog(`[desktop] 自动进入失败，停留在启动页: ${err.message}`);
+    broadcast('server:status', publicState());
+  }
+}
+
 // ---------- 冒烟测试模式：electron . --smoke [workspace] ----------
 
 async function runSmoke() {
@@ -479,6 +531,7 @@ if (!gotLock) {
     registerIpc();
     buildMenu();
     createWindow();
+    void autoEnter();
   });
 
   app.on('window-all-closed', () => {
