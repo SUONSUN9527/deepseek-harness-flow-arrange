@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+  html, body { margin: 0; background: transparent; }
+  .tile {
+    width: 256px; height: 256px;
+    border-radius: 58px;
+    background: linear-gradient(135deg, #4d6bfe 0%, #6a58fe 55%, #7a4dfe 100%);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow:
+      inset 0 24px 48px rgba(255, 255, 255, .16),
+      inset 0 -24px 48px rgba(10, 8, 40, .28);
+    position: relative;
+    overflow: hidden;
+  }
+  .tile::after {
+    content: "";
+    position: absolute;
+    left: -30%; top: -55%;
+    width: 160%; height: 100%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,.22), transparent 65%);
+  }
+  span {
+    font-family: "Segoe UI", system-ui, sans-serif;
+    font-weight: 800;
+    font-size: 116px;
+    letter-spacing: -6px;
+    color: #fff;
+    transform: translateX(-3px);
+    text-shadow: 0 6px 18px rgba(20, 20, 80, .35);
+  }
+</style>
+</head>
+<body>
+  <div class="tile"><span>DS</span></div>
+</body>
+</html>

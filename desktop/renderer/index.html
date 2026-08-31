@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeepSeek Harness</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <!-- 会话模式：仅顶部 44px 状态栏可见，其余区域由内嵌的 dsh web UI 覆盖 -->
+  <header id="session-bar" hidden>
+    <button id="btn-leave" class="bar-btn" title="停止服务并返回启动页 (Ctrl+Shift+H)">‹ 返回</button>
+    <span class="bar-dot"></span>
+    <span id="bar-mode" class="bar-mode"></span>
+    <span id="bar-workspace" class="bar-workspace"></span>
+    <span id="bar-url" class="bar-url"></span>
+    <span class="bar-spacer"></span>
+    <button id="btn-browser" class="bar-btn" title="在系统浏览器中打开">浏览器打开</button>
+  </header>
+
+  <!-- 自动进入时的全屏加载页：盖住启动器，直到会话视图完成首帧渲染 -->
+  <div id="splash" hidden>
+    <div class="splash-logo">DS</div>
+    <div class="splash-name">DeepSeek Harness</div>
+    <div class="splash-spinner"></div>
+    <div id="splash-status" class="splash-status">正在启动…</div>
+  </div>
+
+  <!-- 启动器 -->
+  <main id="launcher">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">DS</div>
+        <div class="brand-text">
+          <div class="brand-name">DeepSeek Harness</div>
+          <div class="brand-sub">桌面端</div>
+        </div>
+      </div>
+      <div class="recent-title">最近工作区</div>
+      <ul id="recent-list" class="recent-list"></ul>
+      <div class="sidebar-footer">
+        <span id="version-tag">dsh desktop</span>
+      </div>
+    </aside>
+
+    <section class="content">
+      <div class="hero">
+        <h1>开始一次会话</h1>
+        <p class="hero-sub">选择一个工作区目录，桌面端会在本机拉起 <code>dsh web</code> 服务并在窗口内打开会话界面。</p>
+
+        <label class="field-label" for="mode-select">运行模式</label>
+        <div class="mode-row">
+          <select id="mode-select">
+            <option value="claude-codex">Claude × Codex 双模型（Claude 编排 · Codex 执行）</option>
+            <option value="deepseek">DeepSeek 单模型</option>
+          </select>
+        </div>
+        <p id="mode-hint" class="mode-hint"></p>
+
+        <label class="field-label" for="workspace-input">工作区目录</label>
+        <div class="workspace-row">
+          <input id="workspace-input" type="text" spellcheck="false" placeholder="例如 C:\Users\me\projects\my-repo" />
+          <button id="btn-pick" class="ghost-btn">浏览…</button>
+        </div>
+
+        <details class="advanced">
+          <summary>高级选项</summary>
+          <div class="advanced-grid">
+            <label>端口（留空自动分配）<input id="opt-port" type="text" inputmode="numeric" placeholder="自动" /></label>
+            <label>附加参数<input id="opt-extra" type="text" spellcheck="false" placeholder="例如 --patch ./extra.yml" /></label>
+            <label>dsh 入口覆盖（bin.js 路径）<input id="opt-dsh" type="text" spellcheck="false" placeholder="默认使用仓库 apps/cli/lib/bin.js" /></label>
+            <label>Node 路径覆盖<input id="opt-node" type="text" spellcheck="false" placeholder="默认使用 PATH 中的 node" /></label>
+          </div>
+        </details>
+
+        <div class="action-row">
+          <button id="btn-start" class="primary-btn">启动会话</button>
+          <button id="btn-cancel" class="ghost-btn" hidden>停止</button>
+          <span id="status-text" class="status-text"></span>
+        </div>
+
+        <div id="error-banner" class="error-banner" hidden></div>
+
+        <div id="log-panel" class="log-panel" hidden>
+          <div class="log-title">启动日志</div>
+          <pre id="log-body"></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

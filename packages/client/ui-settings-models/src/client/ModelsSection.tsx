@@ -18,6 +18,7 @@ import type { IApiClient } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, IconPlusOutline16, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
+import { DualModelCards, EXECUTOR_SETTINGS_NS, ORCHESTRATOR_SETTINGS_NS } from './DualModelCards.tsx'
 import { deriveKeyRef, messageOf, protocolChoices, providerUsable } from './store.ts'
 import type { ModelsSettingsStore, ProviderRow } from './store.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
@@ -280,11 +281,28 @@ function Loaded({ injected }: { injected: ModelsSectionFace }): ReactNode {
   // one whose schema names the protocols one may speak; without it mounted
   // there is nothing to declare and the entry point stays disabled.
   const protocols = protocolChoices(state.namespaces.get('llm-pi-ai'), schema)
+  // A registered executor namespace IS the deployment's dual-model
+  // declaration; a single-model install never registers it, so the block —
+  // and its extra wire reads — stay off everywhere else.
+  const executorNs = state.namespaces.get(EXECUTOR_SETTINGS_NS)
 
   return (
     <div className={styles['section']}>
       <h2 className={styles['title']}>{t('title')}</h2>
       <p className={styles['intro']}>{t('intro')}</p>
+      {executorNs === undefined
+        ? null
+        : (
+          <DualModelCards
+            orchestrator={state.namespaces.get(ORCHESTRATOR_SETTINGS_NS)}
+            executor={executorNs}
+            schema={schema}
+            api={api}
+            t={t}
+            readOnly={!state.writable}
+            onSaved={() => { void controller.load() }}
+          />
+        )}
       {!state.writable && state.status === 'ready' ? <p className={styles['notice']}>{t('readOnly')}</p> : null}
       {savedIdentity === undefined
         ? null
