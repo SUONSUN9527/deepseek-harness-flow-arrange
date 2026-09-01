@@ -46,13 +46,13 @@
     <section class="content">
       <div class="hero">
         <h1>开始一次会话</h1>
-        <p class="hero-sub">选择一个工作区目录，桌面端会在本机拉起 <code>dsh web</code> 服务并在窗口内打开会话界面。</p>
+        <p class="hero-sub">选择一个工作区目录，桌面端会在本机拉起 <code>dsh web</code> 服务并在窗口内打开 DeepSeek 会话界面。</p>
 
         <label class="field-label" for="mode-select">运行模式</label>
         <div class="mode-row">
           <select id="mode-select">
-            <option value="claude-codex">Claude × Codex 双模型（Claude 编排 · Codex 执行）</option>
-            <option value="deepseek">DeepSeek 单模型</option>
+            <option value="deepseek">DeepSeek 原生模式</option>
+            <option value="claude-codex">Agent 编排（Claude 编排 · Codex 工作）</option>
           </select>
         </div>
         <p id="mode-hint" class="mode-hint"></p>

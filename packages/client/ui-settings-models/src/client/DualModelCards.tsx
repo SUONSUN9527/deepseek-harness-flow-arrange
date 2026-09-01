@@ -1,14 +1,14 @@
 /**
  * Dual-model deployment cards: the orchestrator's default-model dropdown and
- * the Codex executor's model/effort dropdowns. The block renders only when the
+ * the Codex executor's managed-configuration summary. The block renders only when the
  * host registers the executor settings namespace (`subagent-codex`), which is
  * the deployment's own declaration that a second model plane exists — a
  * single-model install never sees it. Every choice list is a fact the host
  * already owns: orchestrator models come from the live `llm.models` catalog,
- * executor choices from the executor namespace's own schema unions, so the
- * page cannot offer a value the deployment would refuse. Each change commits
- * immediately through `settings.mutate` and the page re-renders from the next
- * describe.
+ * executor settings remain owned by native Codex configuration, so the page
+ * cannot accidentally diverge from the worker's runtime. Orchestrator changes
+ * commit immediately through `settings.mutate` and the page re-renders from the
+ * next describe.
  */
 
 import { useEffect, useState } from 'react'
@@ -93,12 +93,12 @@ const IDLE_WRITE: WriteState = { busy: false, failure: undefined, saved: false }
 
 /**
  * Render the dual-model block: one card for the orchestrator's default model,
- * one for the executor's model and reasoning effort.
+ * plus a summary of the executor settings owned by native Codex configuration.
  * @param props - namespace views, wire faces, and copy.
  * @returns the block.
  */
 export function DualModelCards(props: DualModelCardsProps): ReactNode {
-  const { orchestrator, executor, schema, api, t } = props
+  const { orchestrator, schema, api, t } = props
   const [groups, setGroups] = useState<ModelProviderGroup[] | undefined>(undefined)
   const [catalogFailure, setCatalogFailure] = useState<string | undefined>(undefined)
   const [write, setWrite] = useState<WriteState>(IDLE_WRITE)
@@ -149,11 +149,6 @@ export function DualModelCards(props: DualModelCardsProps): ReactNode {
     : ''
   const catalogHasCurrent = groups?.some(group =>
     group.id === currentProvider && group.models.some(model => model.id === currentModel)) === true
-
-  const executorModel = stringField(executor, schema, 'model')
-  const executorEffort = stringField(executor, schema, 'reasoningEffort')
-  const modelChoices = unionChoices(executor, schema, ['model'])
-  const effortChoices = unionChoices(executor, schema, ['reasoningEffort'])
 
   return (
     <div>
@@ -220,49 +215,6 @@ export function DualModelCards(props: DualModelCardsProps): ReactNode {
             </span>
           </div>
           <p className={styles['advancedHint']}>{t('executorHint')}</p>
-          <div className={styles['field']}>
-            <span className={styles['fieldLabel']}>{t('model')}</span>
-            <select
-              className={`${styles['input']} ${styles['selectInput']}`}
-              value={executorModel ?? ''}
-              aria-label={t('executorModel')}
-              disabled={disabled || modelChoices.length === 0}
-              onChange={(event) => {
-                commit(EXECUTOR_SETTINGS_NS, [{ op: 'set', path: ['model'], value: event.target.value }])
-              }}
-            >
-              {executorModel === undefined
-                ? <option value="">{'—'}</option>
-                : modelChoices.includes(executorModel)
-                  ? null
-                  : <option value={executorModel}>{executorModel}</option>}
-              {modelChoices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-            </select>
-          </div>
-          {effortChoices.length === 0
-            ? null
-            : (
-              <div className={styles['field']}>
-                <span className={styles['fieldLabel']}>{t('executorEffort')}</span>
-                <select
-                  className={`${styles['input']} ${styles['selectInput']}`}
-                  value={executorEffort ?? ''}
-                  aria-label={t('executorEffort')}
-                  disabled={disabled}
-                  onChange={(event) => {
-                    commit(EXECUTOR_SETTINGS_NS, [
-                      { op: 'set', path: ['reasoningEffort'], value: event.target.value },
-                    ])
-                  }}
-                >
-                  {executorEffort === undefined || effortChoices.includes(executorEffort)
-                    ? null
-                    : <option value={executorEffort}>{executorEffort}</option>}
-                  {executorEffort === undefined ? <option value="">{'—'}</option> : null}
-                  {effortChoices.map(choice => <option key={choice} value={choice}>{choice}</option>)}
-                </select>
-              </div>
-            )}
         </li>
       </ul>
       {write.failure !== undefined ? <p className={styles['error']}>{write.failure}</p> : null}

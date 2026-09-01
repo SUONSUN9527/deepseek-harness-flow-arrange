@@ -4,11 +4,11 @@
 
 const { app, BrowserWindow, WebContentsView, ipcMain, dialog, shell, Menu } = require('electron');
 const { spawn, spawnSync } = require('node:child_process');
-const os = require('node:os');
 const net = require('node:net');
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const { deploymentFor } = require('./runtime-config.js');
 
 // 会话视图占满整窗（0 = 无顶部状态栏）。返回启动页与浏览器打开走应用菜单
 // （Alt 呼出）：返回启动页 Ctrl+Shift+H，在浏览器中打开见「应用」菜单。
@@ -19,11 +19,6 @@ const BOOT_TIMEOUT_MS = 120_000;
 // claude-codex 用 18080，与浏览器直启的 claude-codex-web 后端同源同端口：
 // 该端口已有 dsh 在跑时桌面端直接复用那个后端，不再另起一份（复用探测
 // 仅在 claude-codex 模式下进行，deepseek 模式绝不能挂错后端）。
-const MODE_PORTS = { 'claude-codex': 18080, deepseek: 26100 };
-// 桌面端与浏览器直启必须是同一套部署：同一 Harness home（凭据/会话/preset）
-// 加同一 profile（Claude 编排 × Codex 执行）。设置里可覆盖（dshHome / profile）。
-const DEFAULT_DSH_HOME = path.join(os.homedir(), '.dsh-claude-codex');
-const DEFAULT_PROFILE = 'claude-codex-web';
 const LOG_LIMIT = 800;
 
 let mainWindow = null;
@@ -39,27 +34,6 @@ const server = {
   error: '',
   logs: [],
 };
-
-// 运行模式 → (DSH_HOME, profile)。claude-codex 模式使用独立 Harness home
-// ~/.dsh-claude-codex 的 claude-codex-web profile（Claude 编排 × Codex 执行；
-// Claude OAuth 凭证与 Codex 中转配置都在该 home 下）；deepseek 模式回到默认
-// ~/.dsh 的 web profile。设置里的 dshHome / profile 覆盖优先于模式默认值。
-function resolveMode(cfg) {
-  return cfg.mode === 'deepseek' ? 'deepseek' : 'claude-codex';
-}
-
-function deploymentFor(cfg) {
-  const mode = resolveMode(cfg);
-  const defaults = mode === 'deepseek'
-    ? { dshHome: path.join(os.homedir(), '.dsh'), profile: 'web' }
-    : { dshHome: DEFAULT_DSH_HOME, profile: DEFAULT_PROFILE };
-  return {
-    mode,
-    dshHome: cfg.dshHome || defaults.dshHome,
-    profile: cfg.profile || defaults.profile,
-    defaultPort: MODE_PORTS[mode],
-  };
-}
 
 // ---------- 配置持久化 ----------
 

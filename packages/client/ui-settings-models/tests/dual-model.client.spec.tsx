@@ -107,7 +107,7 @@ function renderCards(props: Partial<DualModelCardsProps> & { api: DualModelCards
 }
 
 describe('DualModelCards', () => {
-  it('renders both cards and commits an orchestrator model change', async () => {
+  it('renders the orchestrator selector and keeps worker model controls hidden', async () => {
     const { api, mutate } = faces()
     const { onSaved } = renderCards({
       api,
@@ -116,6 +116,9 @@ describe('DualModelCards', () => {
     const select = screen.getByLabelText<HTMLSelectElement>(en.orchestratorModel)
     await waitFor(() => { expect(select.disabled).toBe(false) })
     expect(screen.getByText('Claude Opus 4.5')).toBeDefined()
+    expect(screen.getByText(en.executorHint)).toBeDefined()
+    expect(screen.queryByLabelText(en.executorModel)).toBeNull()
+    expect(screen.queryByLabelText(en.executorEffort)).toBeNull()
     fireEvent.change(select, { target: { value: `anthropic${String.fromCharCode(0x1F)}claude-sonnet-5` } })
     await waitFor(() => { expect(onSaved).toHaveBeenCalledTimes(1) })
     expect(mutate).toHaveBeenCalledWith({
@@ -129,44 +132,25 @@ describe('DualModelCards', () => {
     expect(await screen.findByText(en.dualSaved)).toBeDefined()
   })
 
-  it('commits executor model and effort changes to the executor namespace', async () => {
-    const { api, mutate } = faces()
-    const { onSaved } = renderCards({ api })
-    fireEvent.change(screen.getByLabelText(en.executorModel), { target: { value: 'gpt-5.2' } })
-    await waitFor(() => { expect(onSaved).toHaveBeenCalledTimes(1) })
-    expect(mutate).toHaveBeenCalledWith({
-      ns: 'subagent-codex',
-      ops: [{ op: 'set', path: ['model'], value: 'gpt-5.2' }],
-    })
-    fireEvent.change(screen.getByLabelText(en.executorEffort), { target: { value: 'high' } })
-    await waitFor(() => { expect(onSaved).toHaveBeenCalledTimes(2) })
-    expect(mutate).toHaveBeenLastCalledWith({
-      ns: 'subagent-codex',
-      ops: [{ op: 'set', path: ['reasoningEffort'], value: 'high' }],
-    })
-  })
-
-  it('renders without an orchestrator namespace and with unset executor values', async () => {
+  it('renders the worker summary without an orchestrator namespace', async () => {
     const { api } = faces()
     renderCards({ api, executor: executorNs({}) })
     expect(screen.queryByLabelText(en.orchestratorModel)).toBeNull()
-    const model = screen.getByLabelText<HTMLSelectElement>(en.executorModel)
-    expect(model.value).toBe('')
-    const effort = screen.getByLabelText<HTMLSelectElement>(en.executorEffort)
-    expect(effort.value).toBe('')
-    await waitFor(() => { expect(model.disabled).toBe(false) })
+    expect(screen.getByText(en.executorModel)).toBeDefined()
+    expect(screen.getByText(en.executorHint)).toBeDefined()
+    expect(screen.queryByLabelText(en.executorModel)).toBeNull()
+    expect(screen.queryByLabelText(en.executorEffort)).toBeNull()
   })
 
   it('keeps stored values the schema unions no longer advertise selectable', () => {
     const { api } = faces()
     renderCards({
       api,
-      executor: executorNs({ model: 'gpt-legacy', reasoningEffort: 'ultra' }),
       orchestrator: orchestratorNs({ provider: 'anthropic', model: 'claude-legacy' }),
     })
-    expect(screen.getByLabelText<HTMLSelectElement>(en.executorModel).value).toBe('gpt-legacy')
-    expect(screen.getByLabelText<HTMLSelectElement>(en.executorEffort).value).toBe('ultra')
     expect(screen.getByText('claude-legacy (anthropic)')).toBeDefined()
+    expect(screen.queryByLabelText(en.executorModel)).toBeNull()
+    expect(screen.queryByLabelText(en.executorEffort)).toBeNull()
   })
 
   it('shows a placeholder when the orchestrator has no stored selection', async () => {
@@ -179,16 +163,28 @@ describe('DualModelCards', () => {
 
   it('surfaces a business-rejected write without calling onSaved', async () => {
     const { api } = faces({ mutate: () => Promise.resolve(rejected('refused')) })
-    const { onSaved } = renderCards({ api })
-    fireEvent.change(screen.getByLabelText(en.executorModel), { target: { value: 'gpt-5.2' } })
+    const { onSaved } = renderCards({
+      api,
+      orchestrator: orchestratorNs({ provider: 'anthropic', model: 'claude-opus-4-5' }),
+    })
+    await waitFor(() => { expect(screen.getByLabelText<HTMLSelectElement>(en.orchestratorModel).disabled).toBe(false) })
+    fireEvent.change(screen.getByLabelText(en.orchestratorModel), {
+      target: { value: `anthropic${String.fromCharCode(0x1F)}claude-sonnet-5` },
+    })
     expect(await screen.findByText('refused')).toBeDefined()
     expect(onSaved).not.toHaveBeenCalled()
   })
 
   it('surfaces a transport-rejected write', async () => {
     const { api } = faces({ mutate: () => Promise.reject(new Error('gone')) })
-    renderCards({ api })
-    fireEvent.change(screen.getByLabelText(en.executorModel), { target: { value: 'gpt-5.2' } })
+    renderCards({
+      api,
+      orchestrator: orchestratorNs({ provider: 'anthropic', model: 'claude-opus-4-5' }),
+    })
+    await waitFor(() => { expect(screen.getByLabelText<HTMLSelectElement>(en.orchestratorModel).disabled).toBe(false) })
+    fireEvent.change(screen.getByLabelText(en.orchestratorModel), {
+      target: { value: `anthropic${String.fromCharCode(0x1F)}claude-sonnet-5` },
+    })
     expect(await screen.findByText('gone')).toBeDefined()
   })
 
@@ -245,22 +241,10 @@ describe('DualModelCards', () => {
       orchestrator: orchestratorNs({ provider: 'anthropic', model: 'claude-opus-4-5' }),
     })
     await waitFor(() => {
-      expect(screen.getByLabelText<HTMLSelectElement>(en.executorModel).disabled).toBe(true)
+      expect(screen.getByLabelText<HTMLSelectElement>(en.orchestratorModel).disabled).toBe(true)
     })
     expect(screen.getByLabelText<HTMLSelectElement>(en.orchestratorModel).disabled).toBe(true)
-    expect(screen.getByLabelText<HTMLSelectElement>(en.executorEffort).disabled).toBe(true)
-  })
-
-  it('hides the effort field when the executor schema declares no union', () => {
-    const { api } = faces()
-    const bare = {
-      ...executorNs({ model: 'gpt-5.6-sol' }),
-      schema: JSON.parse(JSON.stringify(Schema.object({
-        model: Schema.union(['gpt-5.6-sol']),
-        reasoningEffort: Schema.string(),
-      }).toJSON())) as unknown,
-    }
-    renderCards({ api, executor: bare })
+    expect(screen.queryByLabelText(en.executorModel)).toBeNull()
     expect(screen.queryByLabelText(en.executorEffort)).toBeNull()
   })
 })

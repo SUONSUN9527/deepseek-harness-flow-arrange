@@ -27,14 +27,9 @@ if (!api) {
   btnStart.disabled = true;
 }
 
-const MODE_LABELS = {
-  'claude-codex': 'Claude × Codex 双模型',
-  deepseek: 'DeepSeek 单模型',
-};
-
 const MODE_HINTS = {
-  'claude-codex': 'Claude 负责对话编排，Codex 负责代码执行；使用独立配置目录 ~/.dsh-claude-codex（Claude OAuth/API Key 与 Codex 中转均在其中）。',
-  deepseek: '原生单模型模式，使用默认配置目录 ~/.dsh。',
+  'claude-codex': 'Agent 编排模式：编排 agent 使用 Claude，可通过 Auth 或 ANTHROPIC_API_KEY 接入；工作 agent 使用 Codex 原生 Auth/API Key。工作 agent 的模型由 Codex 配置固定。',
+  deepseek: 'DeepSeek 原生单模型模式，使用默认配置目录 ~/.dsh；在模型设置中配置 DeepSeek API Key。',
 };
 
 function updateModeHint() {
@@ -144,7 +139,7 @@ async function init() {
   if (!api) return;
   const cfg = await refreshRecent();
   if (cfg.lastWorkspace) workspaceInput.value = cfg.lastWorkspace;
-  modeSelect.value = cfg.mode === 'deepseek' ? 'deepseek' : 'claude-codex';
+  modeSelect.value = cfg.mode === 'claude-codex' ? 'claude-codex' : 'deepseek';
   updateModeHint();
   modeSelect.addEventListener('change', () => {
     updateModeHint();
