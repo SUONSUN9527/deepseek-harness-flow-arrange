@@ -12,7 +12,7 @@ The model-facing controller for `ctx.jobs`: three kind-independent tools, comple
 
 All three use generic UI cards: `read` for output and list, `execute` for kill.
 
-Their canonical values are `{ text, job }`, `PublicJobSnapshot[]`, and `{ outcome: 'cancellation-requested' | 'already-finished', job }`. A public snapshot carries id, kind, label, status/detail, and start/finish times; it deliberately omits `ownerSession` and the internal `reported` notice bit. Native renderers preserve the status and acknowledgement text above.
+Their canonical values are `{ text, job }`, `PublicJobSnapshot[]`, and `{ outcome: 'cancellation-requested' | 'already-finished', job }`. A public snapshot carries id, kind, label, status/phase/detail, revision, progress, and start/finish times; it deliberately omits `ownerSession` and the internal `reported` notice bit. Native renderers preserve the status and acknowledgement text above.
 
 When a producer supplies `outputLimitBytes`, `job_output`, terminal `job_kill`, and completion notices cap the complete Native UTF-8 result after adding status or notice text. Reads retain the output tail and control suffix when they fit; a bounded completion notice instead reserves `background job <id>` and the `job_output` collection instruction before spending remaining bytes on its variable kind, label, status, detail, and truncation marker. A prepended pre-execute listener captures the caller-visible job before policy, and each job-control definition's final-content callback applies its producer cap to single-text denials, short-circuits, normalized tool or pipeline failures, replacements, and blocks; structured multi-block policy results retain their shape. An existing producer truncation marker is reused rather than duplicated. Producers that omit the field retain the existing unbounded controller behavior.
 
@@ -30,8 +30,8 @@ One host registry may carry several mounts of this plugin — one per agent pres
 
 | key | default | meaning |
 |---|---|---|
-| `waitTimeoutMs` | `30000` | wait used when `wait: true` omits `timeout_ms` |
-| `maxWaitTimeoutMs` | `600000` | cap for model-supplied waits |
+| `waitTimeoutMs` | `3000` | wait used when `wait: true` omits `timeout_ms` |
+| `maxWaitTimeoutMs` | `60000` | cap for model-supplied waits |
 | `completionDelivery` | `wakeup` | `wakeup` opens a turn on an idle owner; `quiet` leaves the notice pending |
 | `maxConsecutiveWakes` | `3` | turns one owner may open by wake before notices degrade to injection |
 
@@ -77,7 +77,7 @@ Prefix-stable while tool definitions and visibility are unchanged. Registration 
 
 #### What the model sees
 
-Reads return output or `(no new output)` followed by `[status: <status>]` and optional detail. An empty list returns `(no background jobs)`. Kill returns `requested cancellation of job <id>` or the existing terminal status. Unreported owned completion uses the notice above.
+Reads return output or `(no new output)` followed by `[status: <status>]`, an optional phase, and detail. An empty list returns `(no background jobs)`. Kill returns `requested cancellation of job <id>` or the existing terminal status. Unreported owned completion uses the notice above.
 
 #### Token effect
 

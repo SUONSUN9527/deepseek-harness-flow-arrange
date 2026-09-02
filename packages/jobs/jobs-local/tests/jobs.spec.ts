@@ -115,6 +115,36 @@ describe('LocalJobRegistry.start', () => {
     expectTypeOf<JobSnapshot['ownerSession']>().toEqualTypeOf<SessionId | undefined>()
   })
 
+  it('publishes provisioning and running phases through the ready handshake', async () => {
+    const ctx = await harness({ startupTimeoutMs: 100 })
+    let ready!: () => void
+    const p = producer({ ready: new Promise<void>((resolve) => { ready = resolve }) })
+    const id = ctx.jobs.start(p.spec)
+    expect(ctx.jobs.get(id)).toMatchObject({ phase: 'provisioning', status: 'running', revision: 1 })
+    ready()
+    await tick()
+    expect(ctx.jobs.get(id)).toMatchObject({ phase: 'running', runningAt: expect.any(Number) as unknown, revision: 2 })
+    p.settle({ status: 'completed' })
+    await tick()
+  })
+
+  it('fails a producer that never becomes ready instead of leaving it running forever', async () => {
+    const ctx = await harness({ startupTimeoutMs: 5 })
+    const p = producer({ ready: new Promise<void>(() => {}) })
+    const id = ctx.jobs.start(p.spec)
+    await new Promise(resolve => setTimeout(resolve, 15))
+    expect(ctx.jobs.get(id)).toMatchObject({ status: 'failed', phase: 'timeout', revision: 2 })
+  })
+
+  it('marks cancellation as orphaned when the producer never settles', async () => {
+    const ctx = await harness({ cancelGraceTimeoutMs: 5 })
+    const p = producer()
+    const id = ctx.jobs.start(p.spec)
+    ctx.jobs.kill(id)
+    await new Promise(resolve => setTimeout(resolve, 15))
+    expect(ctx.jobs.get(id)).toMatchObject({ status: 'failed', phase: 'orphaned', detail: expect.stringContaining('cancellation timeout') as unknown })
+  })
+
   it('refuses to register while no job controller serves the owner', async () => {
     const ctx = new Context()
     await ctx.plugin(LocalJobRegistry)

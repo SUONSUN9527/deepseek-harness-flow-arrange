@@ -212,9 +212,12 @@ function contextOfContents(contents: readonly string[]): NormalizeContext {
 async function hydrateReplayFixtures(scenario: SdkScenario, cwd: string): Promise<string[]> {
   const root = join(cwd, '.replay-fixtures')
   await mkdir(root, { recursive: true })
+  // Session fixtures are JSONL; replace the token with JSON-escaped path
+  // content so Windows separators remain valid JSON string characters.
+  const escapedCwd = JSON.stringify(cwd).slice(1, -1)
   return Promise.all(fixtureFiles(scenario).map(async (source) => {
     const destination = join(root, basename(source))
-    await writeFile(destination, (await readFile(source, 'utf8')).replaceAll('{{cwd}}', cwd))
+    await writeFile(destination, (await readFile(source, 'utf8')).replaceAll('{{cwd}}', escapedCwd))
     return destination
   }))
 }

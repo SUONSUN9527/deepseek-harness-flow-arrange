@@ -264,6 +264,7 @@ export function apply(ctx: Context, config: Config = {}): void {
                 cancelRequested = true
                 operation.cancel()
               },
+              ready: Promise.resolve(),
               done: operation.done.then(
                 result => ({ status: cancelRequested ? 'killed' as const : 'completed' as const, detail: sendDetail(result) }),
                 (error: unknown) => ({ status: 'failed' as const, detail: String(error) }),

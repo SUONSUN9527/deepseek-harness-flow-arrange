@@ -12,7 +12,7 @@
 
 三个工具都使用通用 UI 卡片：output 和 list 使用 `read`，kill 使用 `execute`。
 
-它们的规范值依次为 `{ text, job }`、`PublicJobSnapshot[]` 和 `{ outcome: 'cancellation-requested' | 'already-finished', job }`。公共快照携带 id、kind、label、status/detail 及开始／结束时间；它有意省略 `ownerSession` 和内部 `reported` 通知位。原生 renderer 保留上述状态与确认文本。
+它们的规范值依次为 `{ text, job }`、`PublicJobSnapshot[]` 和 `{ outcome: 'cancellation-requested' | 'already-finished', job }`。公共快照携带 id、kind、label、status/phase/detail、revision、进度时间以及开始／结束时间；它有意省略 `ownerSession` 和内部 `reported` 通知位。原生 renderer 保留上述状态与确认文本。
 
 当生产方提供 `outputLimitBytes` 时，`job_output`、针对已终止任务的 `job_kill` 和完成通知会在添加状态或通知文本后，对完整的原生 UTF-8 结果施加上限。只要能够容纳，读取就会保留输出尾部与控制后缀；有界完成通知则先为 `background job <id>` 和 `job_output` 收集指令预留空间，再把剩余字节用于可变的 kind、label、status、detail 与截断标记。一个前置 pre-execute 监听器会在策略运行前捕获调用方可见任务；每个任务控制定义的 final-content 回调会把其生产方上限应用到单文本拒绝、短路、规范化工具或流水线失败、替换和阻止；结构化多块策略结果保持自身形状。已有的生产方截断标记会复用，不会重复添加。省略该字段的生产方保留现有的无界控制器行为。
 
@@ -30,8 +30,8 @@
 
 | key | 默认值 | 含义 |
 |---|---|---|
-| `waitTimeoutMs` | `30000` | `wait: true` 省略 `timeout_ms` 时使用的等待时间 |
-| `maxWaitTimeoutMs` | `600000` | 模型所给等待时间的上限 |
+| `waitTimeoutMs` | `3000` | `wait: true` 省略 `timeout_ms` 时使用的等待时间 |
+| `maxWaitTimeoutMs` | `60000` | 模型所给等待时间的上限 |
 | `completionDelivery` | `wakeup` | `wakeup` 为空闲所有者开启一轮；`quiet` 让通知继续待领 |
 | `maxConsecutiveWakes` | `3` | 一个所有者可由唤醒开启的轮数，超出后通知降级为注入 |
 
@@ -77,7 +77,7 @@ Track every background job id you start. You are notified in-session when a job 
 
 #### 模型看到的内容
 
-读取会返回输出或 `(no new output)`，随后是 `[status: <status>]` 和可选 detail。空列表返回 `(no background jobs)`。kill 返回 `requested cancellation of job <id>` 或现有终止状态。尚未报告且有 owner 的任务完成时使用上述通知。
+读取会返回输出或 `(no new output)`，随后是 `[status: <status>]`、可选 phase 和 detail。空列表返回 `(no background jobs)`。kill 返回 `requested cancellation of job <id>` 或现有终止状态。尚未报告且有 owner 的任务完成时使用上述通知。
 
 #### Token 影响
 

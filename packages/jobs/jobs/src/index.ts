@@ -20,6 +20,7 @@ export type {
   JobKindMap,
   JobOutcome,
   JobRead,
+  JobPhase,
   JobSnapshot,
   JobStart,
   JobStatus,

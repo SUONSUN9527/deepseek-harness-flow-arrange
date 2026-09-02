@@ -368,7 +368,7 @@ export function apply(ctx: Context, config: Config): void {
           text: value.kind === 'background'
             ? `started background subagent job ${value.jobId}`
             : value.kind === 'continuable'
-              ? `started subagent ${value.subagentId}`
+              ? `accepted subagent ${value.subagentId}`
               : outputValueText(value.output),
         }],
       },
@@ -423,6 +423,9 @@ export function apply(ctx: Context, config: Config): void {
                 cancel: (reason?: string) => {
                   controller.abort(reason ?? 'background subagent task killed')
                 },
+                // The job registry must distinguish accepted work from a
+                // provider that never publishes a child run.
+                ready: start.then(() => undefined),
                 done: settleStart(start, controller.signal),
                 // No readOutput: the child session owns intermediate detail.
               }

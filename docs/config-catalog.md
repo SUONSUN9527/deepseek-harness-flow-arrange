@@ -901,10 +901,14 @@ export interface Config {
    * omission defaults to 10.
    */
   maxConcurrentJobsPerOwner?: number
+  /** Maximum time a producer may remain in `provisioning` (default 10s). */
+  startupTimeoutMs?: number
+  /** Maximum time a cancellation may remain in `stopping` (default 5s). */
+  cancelGraceTimeoutMs?: number
 }
 ```
 
-Source: [`packages/jobs/jobs-local/src/index.ts:31`](../packages/jobs/jobs-local/src/index.ts)
+Source: [`packages/jobs/jobs-local/src/index.ts:33`](../packages/jobs/jobs-local/src/index.ts)
 
 <a id="deepseek-aidsh-llm-deepseek"></a>
 
@@ -2625,9 +2629,9 @@ Requires: `tools` · `jobs` · `systemPrompt`
 ```ts config-catalog
 /** Configures bounded `job_output` waits and completion-notice delivery. */
 export interface Config {
-  /** Wait duration applied when `job_output` sets `wait` without `timeout_ms` (default 30s). */
+  /** Wait duration applied when `job_output` sets `wait` without `timeout_ms` (default 3s). */
   waitTimeoutMs?: number
-  /** Hard cap on any single wait; a larger model-supplied `timeout_ms` is clamped down to it (default 10min). */
+  /** Hard cap on any single wait; a larger model-supplied `timeout_ms` is clamped down to it (default 60s). */
   maxWaitTimeoutMs?: number
   /** Whether a completion opens a turn on an idle owner (default `wakeup`). */
   completionDelivery?: CompletionDelivery

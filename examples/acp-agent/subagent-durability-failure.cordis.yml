@@ -5,6 +5,13 @@
   config:
     path: ./cordis.yml
     patches:
+      - id: tool-subagent
+        name: '@deepseek-ai/dsh-tool-subagent'
+        config:
+          provider: spawn
+          toolName: subagent
+          backgroundMode: continuable
+          maxDepth: 1
       - insert:
           - id: subagent-durability-failure
             name: './tests/fixtures/subagent-durability-failure.ts'

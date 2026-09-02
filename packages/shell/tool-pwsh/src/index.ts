@@ -387,6 +387,7 @@ export function apply(ctx: Context, config: Config = {}): void {
             const proc = ctx.shell.start(ctx.shell.resolve(request))
             return {
               cancel: () => void proc.kill(),
+              ready: Promise.resolve(),
               done: proc.done.then(() => processOutcome(proc)),
               readOutput: () => renderPwshProcessRead(proc.readOutput(), proc.sandbox, escalationModes),
             }

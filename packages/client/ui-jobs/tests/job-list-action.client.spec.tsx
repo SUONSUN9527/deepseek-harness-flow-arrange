@@ -214,6 +214,18 @@ describe('JobListAction dismissal', () => {
 })
 
 describe('JobListAction wire tolerance', () => {
+  it('treats legacy running and stopping snapshots without phase as live', () => {
+    vi.setSystemTime(START + 2_000)
+    render(<JobListAction {...props([
+      job({ id: 'bash-1' as JobView['id'], label: 'legacy running' }),
+      job({ id: 'bash-2' as JobView['id'], label: 'legacy stopping', status: 'stopping' }),
+    ])} />)
+    expect(screen.getByRole('button', { name: '2 个后台任务运行中' })).toBeDefined()
+
+    fireEvent.click(screen.getByRole('button'))
+    expect(rowCells().map(cells => cells[3])).toEqual(['2秒', '2秒'])
+  })
+
   it('treats a settled job with no finishedAt as zero-duration and sorts it by start', () => {
     // `finishedAt` is optional on the wire; the Host always sets it, so this
     // covers a producer or carrier that ever stops doing so.

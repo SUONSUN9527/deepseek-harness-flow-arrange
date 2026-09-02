@@ -7,9 +7,9 @@
 ## 服务约定
 
 - `start(spec): JobId` 验证已附加的任务控制器、spec、确切且仍存活的 owner、可选的正数 `outputLimitBytes`，以及 Service Provider 所拥有的准入策略，然后只调用生产方的 `run()` 一次。预检拒绝或启动方抛出异常时都不会生成 job id 或注册工作；成功返回会直接提交，不再执行其他可能失败的步骤。
-- `get(id, caller?)` 和 `list(caller?)` 返回非消费式快照。列表只包含调用方拥有及无 owner 的任务。
+- `get(id, caller?)` 和 `list(caller?)` 返回非消费式快照。列表只包含调用方拥有及无 owner 的任务。快照增加 `phase`、`revision` 和进度时间戳，用于区分已接受、启动中、运行中、终态、超时和疑似孤儿任务。
 - `read(id, caller?)` 消费流任务的唯一游标；对于最终输出任务，则以幂等方式读取终止输出。
-- `kill(id, caller?, reason?)` 在更改状态前调用生产方取消。取消抛出异常时任务保持运行；成功则把状态改为 `stopping`，并将终止交付标记为已报告。
+- `kill(id, caller?, reason?)` 在更改状态前调用生产方取消。取消抛出异常时任务保持运行；成功则把状态改为 `stopping`，并将终止交付标记为已报告。实现必须限制 stopping 阶段的时长，无法确认工作已停止时报告 `orphaned`。
 - `wait(id, timeoutMs, caller?, signal?)` 返回终止快照，或在超时时返回存活快照。中止只会停止等待；一旦终止交付已向该等待方提交，终止结果优先。
 - `onJobDone(listener)` 观察每条终止记录及其精确 owner。监听器抛出的异常和产生的拒绝都会被隔离；系统不会等待监听器工作。
 - `onJobsChanged(listener)` 观察可见集合的变化——注册、每一次转入 stopping（包括 teardown 在等待缓慢生产者之前的那一次）、结算、owner 销毁时的移除，以及服务销毁提交的清空——只携带集合发生变化的那个 owner，或在无主任务变化、因而每个调用方的集合都随之变化时携带 `undefined`。它按 owner 分粒度，因为移除是任何逐任务记录都无法表达的变化；它也不是 `onJobDone` 的超集：它不含任何投递含义，也不把任何东西标为已上报。注册绑定的是调用方 fiber，因此挂在注册表之外的观察者仍能收到销毁时的清空。

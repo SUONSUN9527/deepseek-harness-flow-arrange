@@ -432,8 +432,13 @@ function jobViews(snapshots: readonly JobSnapshot[]): JobView[] {
     kind: job.kind,
     label: job.label,
     status: job.status,
+    ...job.phase === undefined ? {} : { phase: job.phase },
     ...job.detail === undefined ? {} : { detail: job.detail },
     startedAt: job.startedAt,
+    ...job.acceptedAt === undefined ? {} : { acceptedAt: job.acceptedAt },
+    ...job.runningAt === undefined ? {} : { runningAt: job.runningAt },
+    ...job.lastProgressAt === undefined ? {} : { lastProgressAt: job.lastProgressAt },
+    ...job.revision === undefined ? {} : { revision: job.revision },
     ...job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt },
   }))
 }
