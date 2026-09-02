@@ -1,5 +1,4 @@
-# Keyless counterpart to subagent-durability-failure.cordis.yml: replace the
-# live adapter with replay and fail the provider-owned final child checkpoint.
+# Keyless counterpart to subagent-list-agents.cordis.yml.
 - id: base
   name: '@deepseek-ai/cordis-plugin-include'
   config:
@@ -28,16 +27,6 @@
             You are a coding assistant powered by the {{model}} model. Your working directory is {{cwd}}. Your bash tool runs under a file sandbox — a `[sandbox: file access denied …]` result is policy, not a command bug.
 
             Verify your work by running the code or tests. Keep answers brief and factual.
-      - id: sandbox
-        name: '@deepseek-ai/dsh-sandbox-local'
-        config:
-          runnerCommand:
-            - bash
-            - -c
-            - while [ "$1" != "--" ]; do shift; done; shift; exec "$@"
-            - passthrough-runner
-          runnerFailureSignatures:
-            - 'passthrough-runner: profile rejected'
       - insert:
           - id: llm-replay
             name: '@deepseek-ai/dsh-llm-replay'
@@ -48,5 +37,5 @@
                   models:
                     - id: deepseek-v4-flash
                     - id: deepseek-v4-pro
-          - id: subagent-durability-failure
-            name: './tests/fixtures/subagent-durability-failure.ts'
+          - id: subagent-settlement-marker
+            name: './tests/fixtures/subagent-settlement-marker.ts'

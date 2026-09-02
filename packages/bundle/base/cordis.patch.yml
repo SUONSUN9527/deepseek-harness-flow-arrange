@@ -315,7 +315,7 @@
       config:
         provider: spawn
         toolName: subagent
-        backgroundMode: continuable
+        backgroundMode: one-shot
 
     # Fork stays one-shot: a continuable child's `report` tool and prompt
     # section precede the inherited history a fork exists to reuse; one-shot

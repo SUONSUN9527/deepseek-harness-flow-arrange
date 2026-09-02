@@ -14,7 +14,7 @@ import { TextRetainer } from '@deepseek-ai/dsh-output-retention'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { GenericCallView, ToolDefinition, ToolExecution } from '@deepseek-ai/dsh-tools'
 import { JobId } from '@deepseek-ai/dsh-jobs'
-import type { JobSnapshot } from '@deepseek-ai/dsh-jobs'
+import type { JobPhase, JobSnapshot } from '@deepseek-ai/dsh-jobs'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 
@@ -30,9 +30,9 @@ export type CompletionDelivery = 'quiet' | 'wakeup'
 
 /** Configures bounded `job_output` waits and completion-notice delivery. */
 export interface Config {
-  /** Wait duration applied when `job_output` sets `wait` without `timeout_ms` (default 30s). */
+  /** Wait duration applied when `job_output` sets `wait` without `timeout_ms` (default 3s). */
   waitTimeoutMs?: number
-  /** Hard cap on any single wait; a larger model-supplied `timeout_ms` is clamped down to it (default 10min). */
+  /** Hard cap on any single wait; a larger model-supplied `timeout_ms` is clamped down to it (default 60s). */
   maxWaitTimeoutMs?: number
   /** Whether a completion opens a turn on an idle owner (default `wakeup`). */
   completionDelivery?: CompletionDelivery
@@ -46,8 +46,8 @@ export interface Config {
 }
 
 export const Config: z<Config> = z.object({
-  waitTimeoutMs: z.number().min(1).default(30_000),
-  maxWaitTimeoutMs: z.number().min(1).default(600_000),
+  waitTimeoutMs: z.number().min(1).default(3_000),
+  maxWaitTimeoutMs: z.number().min(1).default(60_000),
   completionDelivery: z.union(['quiet', 'wakeup'] as const).default('wakeup'),
   maxConsecutiveWakes: z.number().min(1).default(3),
 })
@@ -58,8 +58,13 @@ export interface PublicJobSnapshot {
   kind: string
   label: string
   status: JobSnapshot['status']
+  phase?: JobPhase
   detail?: string
   startedAt: number
+  acceptedAt?: number
+  runningAt?: number
+  lastProgressAt?: number
+  revision?: number
   finishedAt?: number
 }
 
@@ -76,8 +81,13 @@ const PUBLIC_TASK_SCHEMA = {
       required: true,
       enum: ['running', 'stopping', 'completed', 'killed', 'failed'],
     },
+    phase: { type: 'string', enum: ['provisioning', 'running', 'stopping', 'completed', 'killed', 'failed', 'timeout', 'orphaned'] },
     detail: { type: 'string' },
     startedAt: { type: 'integer', required: true },
+    acceptedAt: { type: 'integer' },
+    runningAt: { type: 'integer' },
+    lastProgressAt: { type: 'integer' },
+    revision: { type: 'integer' },
     finishedAt: { type: 'integer' },
   },
 } as const
@@ -89,8 +99,13 @@ function publicJob(snapshot: JobSnapshot): PublicJobSnapshot {
     kind: snapshot.kind,
     label: snapshot.label,
     status: snapshot.status,
+    ...snapshot.phase !== undefined ? { phase: snapshot.phase } : {},
     ...snapshot.detail !== undefined ? { detail: snapshot.detail } : {},
     startedAt: snapshot.startedAt,
+    ...snapshot.acceptedAt !== undefined ? { acceptedAt: snapshot.acceptedAt } : {},
+    ...snapshot.runningAt !== undefined ? { runningAt: snapshot.runningAt } : {},
+    ...snapshot.lastProgressAt !== undefined ? { lastProgressAt: snapshot.lastProgressAt } : {},
+    ...snapshot.revision !== undefined ? { revision: snapshot.revision } : {},
     ...snapshot.finishedAt !== undefined ? { finishedAt: snapshot.finishedAt } : {},
   }
 }
@@ -100,10 +115,12 @@ function publicJob(snapshot: JobSnapshot): PublicJobSnapshot {
  * @param snapshot - job state to render.
  * @returns a bracketed status line.
  */
-export function statusLine(snapshot: Pick<JobSnapshot, 'status' | 'detail'>): string {
+export function statusLine(snapshot: Pick<JobSnapshot, 'status' | 'detail' | 'phase'>): string {
+  const phase = snapshot.phase
+  const phaseText = phase !== undefined && phase !== snapshot.status ? `, phase: ${phase}` : ''
   return snapshot.detail !== undefined
-    ? `[status: ${snapshot.status}, ${snapshot.detail}]`
-    : `[status: ${snapshot.status}]`
+    ? `[status: ${snapshot.status}${phaseText}, ${snapshot.detail}]`
+    : `[status: ${snapshot.status}${phaseText}]`
 }
 
 const encoder = new TextEncoder()
@@ -203,8 +220,8 @@ function presentTaskCall(title: string, kind: 'read' | 'execute', rawInput?: str
 }
 
 export function apply(ctx: Context, config: Config): void {
-  const waitDefault = config.waitTimeoutMs ?? 30_000
-  const waitCap = config.maxWaitTimeoutMs ?? 600_000
+  const waitDefault = config.waitTimeoutMs ?? 3_000
+  const waitCap = config.maxWaitTimeoutMs ?? 60_000
   const delivery = config.completionDelivery ?? 'wakeup'
   const wakeBudget = config.maxConsecutiveWakes ?? 3
 

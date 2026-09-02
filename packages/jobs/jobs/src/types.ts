@@ -17,6 +17,20 @@ export { JobId } from './brand.ts'
 export type JobStatus = 'running' | 'stopping' | 'completed' | 'killed' | 'failed'
 
 /**
+ * Observable lifecycle phase. `status` remains the compatibility field used
+ * by existing callers; `phase` distinguishes startup and watchdog outcomes.
+ */
+export type JobPhase =
+  | 'provisioning'
+  | 'running'
+  | 'stopping'
+  | 'completed'
+  | 'killed'
+  | 'failed'
+  | 'timeout'
+  | 'orphaned'
+
+/**
  * Producer-defined job kinds. Plugins extend this map by declaration merging;
  * the registry treats every value as an opaque id namespace.
  */
@@ -71,6 +85,11 @@ export interface JobStart {
 /** Hooks through which the runtime controls and observes producer work. */
 export interface JobHooks {
   /**
+   * Resolves once the producer has a live execution handle. Omit for
+   * producers whose `run()` call is itself the startup boundary.
+   */
+  ready?: Promise<void>
+  /**
    * Request termination. Must be synchronous, idempotent, and eventually settle
    * {@link done}; throws propagate. The optional reason is forwarded verbatim.
    */
@@ -111,10 +130,20 @@ export interface JobSnapshot {
   ownerSession?: SessionId
   /** Current lifecycle state. */
   status: JobStatus
+  /** More precise lifecycle phase; absent only on legacy serialized snapshots. */
+  phase?: JobPhase
   /** Kind-specific status detail, present once the producer supplied one (usually terminal). */
   detail?: string
   /** Epoch ms when the job was registered. */
   startedAt: number
+  /** Epoch ms when the job was accepted by the registry. */
+  acceptedAt?: number
+  /** Epoch ms when the producer confirmed a live execution handle. */
+  runningAt?: number
+  /** Most recent startup/progress/termination transition. */
+  lastProgressAt?: number
+  /** Monotonic per-job revision for polling and reconnect deduplication. */
+  revision?: number
   /** Epoch ms when the job settled; absent while `running`/`stopping`. */
   finishedAt?: number
   /**

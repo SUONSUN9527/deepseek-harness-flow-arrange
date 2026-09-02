@@ -70,6 +70,9 @@ const SUBAGENT_DURABILITY_FAILURE_CONFIG = fileURLToPath(
 const SUBAGENT_CONTINUABLE_INHERITANCE_CONFIG = fileURLToPath(
   new URL('../subagent-continuable-inheritance.cordis.yml', import.meta.url),
 )
+const SUBAGENT_LIST_AGENTS_CONFIG = fileURLToPath(
+  new URL('../subagent-list-agents.cordis.yml', import.meta.url),
+)
 const LSP_CONFIG = fileURLToPath(new URL('./lsp.cordis.yml', import.meta.url))
 const WEB_CONFIG = fileURLToPath(new URL('../web.cordis.yml', import.meta.url))
 const FS_SEARCH_CONFIG = fileURLToPath(new URL('./fs-search.cordis.yml', import.meta.url))
@@ -483,6 +486,8 @@ const SCENARIOS: Scenario[] = [
     name: 'subagent-continuable',
     hasModelTurn: true,
     recorded: false,
+    pinsHeader: true,
+    headerClass: 'subagent-continuable',
     pinsChildToolSchemas: [1],
     pinsChildSystemPrompts: [1],
     configPath: SUBAGENT_DURABILITY_FAILURE_CONFIG,
@@ -498,6 +503,7 @@ const SCENARIOS: Scenario[] = [
     name: 'subagent-continuable-inheritance',
     hasModelTurn: true,
     recorded: false,
+    headerClass: 'subagent-continuable',
     pinsChildToolSchemas: [1],
     pinsChildSystemPrompts: [1],
     configPath: SUBAGENT_CONTINUABLE_INHERITANCE_CONFIG,
@@ -511,6 +517,7 @@ const SCENARIOS: Scenario[] = [
     hasModelTurn: true,
     recorded: false,
     overridden: true,
+    headerClass: 'subagent-continuable',
     configPath: SUBAGENT_DURABILITY_FAILURE_CONFIG,
   },
   // Authored child-to-parent transcript: the child calls its scope-local
@@ -522,6 +529,7 @@ const SCENARIOS: Scenario[] = [
     hasModelTurn: true,
     recorded: false,
     overridden: false,
+    headerClass: 'subagent-continuable',
     configPath: SUBAGENT_REPORT_CONFIG,
     pinsChildToolSchemas: [1],
     pinsChildSystemPrompts: [1],
@@ -536,6 +544,8 @@ const SCENARIOS: Scenario[] = [
     name: 'subagent-list-agents',
     hasModelTurn: true,
     recorded: false,
+    headerClass: 'subagent-continuable',
+    configPath: SUBAGENT_LIST_AGENTS_CONFIG,
     pinsChildToolSchemas: [1],
     pinsChildSystemPrompts: [1],
   },
@@ -544,6 +554,7 @@ const SCENARIOS: Scenario[] = [
     hasModelTurn: true,
     recorded: false,
     overridden: true,
+    headerClass: 'subagent-continuable',
     configPath: DEPTH_TWO_CONFIG,
   },
   // Authored keyless replay through the assembled app: a one-shot child calls

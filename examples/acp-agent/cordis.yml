@@ -120,7 +120,7 @@
   config:
     provider: spawn
     toolName: subagent
-    backgroundMode: continuable
+    backgroundMode: one-shot
     maxDepth: 1
 
 # Fork stays one-shot because a continuable child's `report` tool and prompt

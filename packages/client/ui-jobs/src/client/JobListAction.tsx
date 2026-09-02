@@ -15,6 +15,11 @@ const NO_TASKS: readonly JobView[] = []
 
 /** A job the registry still holds open, and whose duration therefore ticks. */
 function isLive(job: JobView): boolean {
+  if (job.phase !== undefined) {
+    return job.phase === 'provisioning' || job.phase === 'running' || job.phase === 'stopping'
+  }
+  // Older carriers omit phase; retain the original status semantics until
+  // every snapshot producer has adopted the richer lifecycle field.
   return job.status === 'running' || job.status === 'stopping'
 }
 
@@ -28,7 +33,8 @@ function assertNever(value: never): never {
  * Status marker semantics. `stopping` and `killed` share the attention color:
  * both mean the work ended (or is ending) on request rather than on its own.
  */
-function dotState(status: JobView['status']): StateDotState {
+function dotState(status: JobView['status'], phase?: JobView['phase']): StateDotState {
+  if (phase === 'timeout' || phase === 'orphaned') return 'error'
   switch (status) {
     case 'running': return 'ongoing'
     case 'stopping': return 'warning'
@@ -41,7 +47,10 @@ function dotState(status: JobView['status']): StateDotState {
 }
 
 /** Human status word for the row and its accessible name. */
-function statusLabel(status: JobView['status'], t: TranslateNS<typeof NS>): string {
+function statusLabel(status: JobView['status'], t: TranslateNS<typeof NS>, phase?: JobView['phase']): string {
+  if (phase === 'provisioning') return t('status.provisioning')
+  if (phase === 'timeout') return t('status.timeout')
+  if (phase === 'orphaned') return t('status.orphaned')
   switch (status) {
     case 'running': return t('status.running')
     case 'stopping': return t('status.stopping')
@@ -159,10 +168,10 @@ export function JobListAction({ sessionId, useSessions, t }: JobListActionProps)
               const live = isLive(job)
               const elapsed = live ? now - job.startedAt : (job.finishedAt ?? job.startedAt) - job.startedAt
               const duration = formatDuration(elapsed, t)
-              const status = statusLabel(job.status, t)
+              const status = statusLabel(job.status, t, job.phase)
               return (
                 <li key={job.id} className={live ? css.row : `${css.row} ${css.rowSettled}`}>
-                  <StateDot state={dotState(job.status)} className={css.rowDot} />
+                  <StateDot state={dotState(job.status, job.phase)} className={css.rowDot} />
                   <span className={css.kind}>{job.kind}</span>
                   <span className={css.label} title={job.label}>{job.label}</span>
                   <span className={css.status} title={job.detail ?? status}>{job.detail ?? status}</span>

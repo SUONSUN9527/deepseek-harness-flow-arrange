@@ -370,6 +370,9 @@ export function apply(ctx: Context, config: Config = {}): void {
             const proc = ctx.shell.start(ctx.shell.resolve(request))
             return {
               cancel: () => void proc.kill(),
+              // `shell.start()` returned a handle, so the process is
+              // provisioned and can be monitored independently of exit.
+              ready: Promise.resolve(),
               done: proc.done.then(() => processOutcome(proc)),
               readOutput: () => renderProcessRead(proc.readOutput(), proc.sandbox, escalationModes),
             }

@@ -1,6 +1,5 @@
-# Snapshot-only overlay fencing the child behind its parent's spawn turn and
-# holding the parent in maintenance until settlement follows the default
-# next-step report. The resumed parent claims both notices in causal order.
+# Snapshot-only durable-agent catalog composition. Keep this scenario on the
+# explicit continuable path so list_agents can observe the retained child.
 - id: base
   name: '@deepseek-ai/cordis-plugin-include'
   config:
@@ -13,6 +12,3 @@
           toolName: subagent
           backgroundMode: continuable
           maxDepth: 1
-
-- id: report-fence
-  name: './tests/fixtures/subagent-report-fence.ts'

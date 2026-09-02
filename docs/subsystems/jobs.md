@@ -63,6 +63,11 @@ interface JobStart {
 /** Hooks through which the runtime controls and observes producer work. */
 interface JobHooks {
   /**
+   * Resolves once the producer has a live execution handle. Omit for
+   * producers whose `run()` call is itself the startup boundary.
+   */
+  ready?: Promise<void>
+  /**
    * Request termination. Must be synchronous, idempotent, and eventually settle
    * {@link done}; throws propagate. The optional reason is forwarded verbatim.
    */
@@ -121,10 +126,20 @@ interface JobSnapshot {
   ownerSession?: SessionId
   /** Current lifecycle state. */
   status: JobStatus
+  /** More precise lifecycle phase; absent only on legacy serialized snapshots. */
+  phase?: JobPhase
   /** Kind-specific status detail, present once the producer supplied one (usually terminal). */
   detail?: string
   /** Epoch ms when the job was registered. */
   startedAt: number
+  /** Epoch ms when the job was accepted by the registry. */
+  acceptedAt?: number
+  /** Epoch ms when the producer confirmed a live execution handle. */
+  runningAt?: number
+  /** Most recent startup/progress/termination transition. */
+  lastProgressAt?: number
+  /** Monotonic per-job revision for polling and reconnect deduplication. */
+  revision?: number
   /** Epoch ms when the job settled; absent while `running`/`stopping`. */
   finishedAt?: number
   /**

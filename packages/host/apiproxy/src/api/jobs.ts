@@ -5,6 +5,7 @@
  */
 
 import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
+import type { JobPhase } from '@deepseek-ai/dsh-jobs'
 
 /**
  * One background job as the client sees it.
@@ -27,10 +28,16 @@ export interface JobView {
   label: string
   /** Current lifecycle state. */
   status: 'running' | 'stopping' | 'completed' | 'killed' | 'failed'
+  /** More precise lifecycle phase for startup and watchdog diagnostics. */
+  phase?: JobPhase
   /** Kind-specific status detail ('exit code: 3'), present once the producer supplied one. */
   detail?: string
   /** Epoch ms when the task was registered. */
   startedAt: number
+  acceptedAt?: number
+  runningAt?: number
+  lastProgressAt?: number
+  revision?: number
   /** Epoch ms when the task settled; absent while live. */
   finishedAt?: number
 }

@@ -17,7 +17,7 @@ import type { ScopeLayer } from '@deepseek-ai/dsh-scope'
 import { deadline, timeoutOf } from '@deepseek-ai/dsh-timeout'
 import { JobRegistry, JobId } from '@deepseek-ai/dsh-jobs'
 import type {
-  JobDoneListener, JobKind, JobOutcome, JobRead, JobSnapshot, JobStart, JobStatus,
+  JobDoneListener, JobKind, JobOutcome, JobPhase, JobRead, JobSnapshot, JobStart, JobStatus,
   JobsChangedListener,
 } from '@deepseek-ai/dsh-jobs'
 
@@ -26,6 +26,8 @@ export const TASK_WAIT_TIMEOUT = 'TASK_WAIT_TIMEOUT'
 
 /** Default maximum number of active jobs in one exact-owner bucket. */
 const DEFAULT_MAX_CONCURRENT_TASKS_PER_OWNER = 10
+const DEFAULT_STARTUP_TIMEOUT_MS = 10_000
+const DEFAULT_CANCEL_GRACE_TIMEOUT_MS = 5_000
 
 /** Configuration for the process-local job registry. */
 export interface Config {
@@ -34,6 +36,10 @@ export interface Config {
    * omission defaults to 10.
    */
   maxConcurrentJobsPerOwner?: number
+  /** Maximum time a producer may remain in `provisioning` (default 10s). */
+  startupTimeoutMs?: number
+  /** Maximum time a cancellation may remain in `stopping` (default 5s). */
+  cancelGraceTimeoutMs?: number
 }
 
 /** The registry's mutable per-job record (never handed out — see {@link LocalJobRegistry.snapshot}). */
@@ -47,9 +53,14 @@ interface TrackedTask {
   cancel: (reason?: string) => void
   readOutput: (() => string) | undefined
   status: JobStatus
+  phase: JobPhase
   detail: string | undefined
   output: string | undefined
   startedAt: number
+  acceptedAt: number
+  runningAt: number | undefined
+  lastProgressAt: number
+  revision: number
   finishedAt: number | undefined
   reported: boolean
   /** Resolves once the terminal snapshot is recorded and listeners notified. */
@@ -60,6 +71,8 @@ interface TrackedTask {
   waiters: number
   /** Removable resolvers for live waits; timeout/abort unregister before the job settles. */
   waitResolvers: Set<() => void>
+  startupTimer: ReturnType<typeof setTimeout> | undefined
+  cancelTimer: ReturnType<typeof setTimeout> | undefined
 }
 
 /** True for the three terminal {@link JobStatus} values. */
@@ -95,10 +108,22 @@ export class LocalJobRegistry extends JobRegistry {
       .min(1)
       .max(Number.MAX_SAFE_INTEGER)
       .default(DEFAULT_MAX_CONCURRENT_TASKS_PER_OWNER),
+    startupTimeoutMs: z.number()
+      .step(1)
+      .min(1)
+      .max(Number.MAX_SAFE_INTEGER)
+      .default(DEFAULT_STARTUP_TIMEOUT_MS),
+    cancelGraceTimeoutMs: z.number()
+      .step(1)
+      .min(1)
+      .max(Number.MAX_SAFE_INTEGER)
+      .default(DEFAULT_CANCEL_GRACE_TIMEOUT_MS),
   })
 
   /** Schemastery-defaulted active-job limit. */
   private readonly maxConcurrentJobsPerOwner: number
+  private readonly startupTimeoutMs: number
+  private readonly cancelGraceTimeoutMs: number
   private store = new Map<JobId, TrackedTask>()
   private counters = new Map<string, number>()
   /**
@@ -124,6 +149,8 @@ export class LocalJobRegistry extends JobRegistry {
     super(ctx)
     // Schemastery validates and fills the default before constructing the service.
     this.maxConcurrentJobsPerOwner = (config as Required<Config>).maxConcurrentJobsPerOwner
+    this.startupTimeoutMs = (config as Required<Config>).startupTimeoutMs
+    this.cancelGraceTimeoutMs = (config as Required<Config>).cancelGraceTimeoutMs
     this.selfCtx = ctx
     ctx.effect(() => () => this.disposeAll(), 'jobs teardown')
   }
@@ -154,6 +181,8 @@ export class LocalJobRegistry extends JobRegistry {
 
     let markSettled!: () => void
     const settled = new Promise<void>((resolve) => { markSettled = resolve })
+    const acceptedAt = Date.now()
+    const provisioning = hooks.ready !== undefined
     const job: TrackedTask = {
       id,
       kind: spec.kind,
@@ -163,17 +192,35 @@ export class LocalJobRegistry extends JobRegistry {
       cancel: hooks.cancel.bind(hooks),
       readOutput: hooks.readOutput?.bind(hooks),
       status: 'running',
+      phase: provisioning ? 'provisioning' : 'running',
       detail: undefined,
       output: undefined,
-      startedAt: Date.now(),
+      startedAt: acceptedAt,
+      acceptedAt,
+      runningAt: provisioning ? undefined : acceptedAt,
+      lastProgressAt: acceptedAt,
+      revision: 1,
       finishedAt: undefined,
       reported: false,
       settled,
       markSettled,
       waiters: 0,
       waitResolvers: new Set(),
+      startupTimer: undefined,
+      cancelTimer: undefined,
     }
     this.store.set(id, job)
+
+    if (hooks.ready !== undefined) {
+      job.startupTimer = setTimeout(() => { this.timeoutProvisioning(job) }, this.startupTimeoutMs)
+      void hooks.ready.then(
+        () => { this.markReady(job) },
+        // The producer's `done` promise owns the terminal outcome and may
+        // translate an abort into `killed`; readiness rejection must not race
+        // and overwrite that authoritative result.
+        () => {},
+      )
+    }
 
     void hooks.done.then(
       (outcome) => { this.settle(job, outcome) },
@@ -222,8 +269,12 @@ export class LocalJobRegistry extends JobRegistry {
     // Cancel first so a throw leaves both lifecycle and notice state unchanged.
     job.cancel(reason)
     job.status = 'stopping'
+    job.phase = 'stopping'
+    job.lastProgressAt = Date.now()
+    job.revision += 1
     job.reported = true
     this.notifyChanged(job.owner)
+    this.armCancelWatchdog(job, reason ?? 'job cancellation')
     return 'requested'
   }
 
@@ -359,6 +410,59 @@ export class LocalJobRegistry extends JobRegistry {
     }
   }
 
+  /** Clear watchdog timers when a job reaches any terminal phase. */
+  private clearWatchdogs(job: TrackedTask): void {
+    if (job.startupTimer !== undefined) clearTimeout(job.startupTimer)
+    if (job.cancelTimer !== undefined) clearTimeout(job.cancelTimer)
+    job.startupTimer = undefined
+    job.cancelTimer = undefined
+  }
+
+  /** Mark a producer ready and publish the transition for polling clients. */
+  private markReady(job: TrackedTask): void {
+    if (isTerminal(job.status) || job.phase !== 'provisioning') return
+    this.clearWatchdogs(job)
+    const now = Date.now()
+    job.phase = 'running'
+    job.runningAt = now
+    job.lastProgressAt = now
+    job.revision += 1
+    this.notifyChanged(job.owner)
+  }
+
+  /** Fail a producer that never exposed a live handle within the startup bound. */
+  private timeoutProvisioning(job: TrackedTask): void {
+    if (isTerminal(job.status) || job.phase !== 'provisioning') return
+    try {
+      job.cancel(`startup timeout after ${this.startupTimeoutMs}ms`)
+      this.settle(job, {
+        status: 'failed',
+        detail: `startup timeout after ${this.startupTimeoutMs}ms`,
+      }, 'timeout')
+    } catch (error: unknown) {
+      this.settle(job, {
+        status: 'failed',
+        detail: `startup timeout; cancel threw and work may be orphaned: ${String(error)}`,
+      }, 'orphaned')
+    }
+  }
+
+  /** Fail a cancellation that did not settle within the grace period. */
+  private timeoutStopping(job: TrackedTask, reason: string): void {
+    if (isTerminal(job.status) || job.phase !== 'stopping') return
+    this.settle(job, {
+      status: 'failed',
+      detail: `cancellation timeout after ${this.cancelGraceTimeoutMs}ms (${reason}); work may be orphaned`,
+    }, 'orphaned')
+  }
+
+  /** Arm a bounded cancellation watchdog; settlement always clears it. */
+  private armCancelWatchdog(job: TrackedTask, reason: string): void {
+    if (isTerminal(job.status)) return
+    if (job.cancelTimer !== undefined) clearTimeout(job.cancelTimer)
+    job.cancelTimer = setTimeout(() => { this.timeoutStopping(job, reason) }, this.cancelGraceTimeoutMs)
+  }
+
   /** Project a fresh read-only snapshot from the mutable record. */
   private snapshot(job: TrackedTask): JobSnapshot {
     const ownerSession = job.owner?.id
@@ -369,8 +473,13 @@ export class LocalJobRegistry extends JobRegistry {
       ...job.outputLimitBytes !== undefined ? { outputLimitBytes: job.outputLimitBytes } : {},
       ...ownerSession !== undefined ? { ownerSession } : {},
       status: job.status,
+      phase: job.phase,
       ...job.detail !== undefined ? { detail: job.detail } : {},
       startedAt: job.startedAt,
+      acceptedAt: job.acceptedAt,
+      ...job.runningAt !== undefined ? { runningAt: job.runningAt } : {},
+      lastProgressAt: job.lastProgressAt,
+      revision: job.revision,
       ...job.finishedAt !== undefined ? { finishedAt: job.finishedAt } : {},
       reported: job.reported,
     }
@@ -413,12 +522,16 @@ export class LocalJobRegistry extends JobRegistry {
    * synchronously: every other observer of this settlement must already have
    * seen the committed record.
    */
-  private settle(job: TrackedTask, outcome: JobOutcome): void {
+  private settle(job: TrackedTask, outcome: JobOutcome, phase: JobPhase = outcome.status): void {
     if (isTerminal(job.status)) return
+    this.clearWatchdogs(job)
     job.status = outcome.status
+    job.phase = phase
     job.detail = outcome.detail
     job.output = outcome.output
     job.finishedAt = Date.now()
+    job.lastProgressAt = job.finishedAt
+    job.revision += 1
     if (job.waiters > 0) job.reported = true
     const snapshot = this.snapshot(job)
     const waitResolvers = [...job.waitResolvers]
@@ -518,6 +631,10 @@ export class LocalJobRegistry extends JobRegistry {
       try {
         job.cancel(reason)
         job.status = 'stopping'
+        job.phase = 'stopping'
+        job.lastProgressAt = Date.now()
+        job.revision += 1
+        this.armCancelWatchdog(job, reason)
         // Teardown reaches settlement only after the producer releases, which a
         // slow stop can defer; announcing the transition here is what keeps an
         // observer from showing `running` for that whole window.

@@ -114,7 +114,12 @@ describe('session/jobs subscription baseline', () => {
       kind: 'bash',
       label: 'pnpm run build',
       status: 'running',
+      phase: 'running',
       startedAt: 0,
+      acceptedAt: expect.any(Number) as unknown,
+      runningAt: expect.any(Number) as unknown,
+      lastProgressAt: expect.any(Number) as unknown,
+      revision: 1,
     })
   })
 })
@@ -150,7 +155,9 @@ describe('session/jobs change pushes', () => {
 
     const [frame] = await collected
     const fields: readonly string[] = Object.keys(frame?.jobs[0] ?? {})
-    expect([...fields].sort()).toEqual(['id', 'kind', 'label', 'startedAt', 'status'])
+    expect([...fields].sort()).toEqual([
+      'acceptedAt', 'id', 'kind', 'label', 'lastProgressAt', 'phase', 'revision', 'runningAt', 'startedAt', 'status',
+    ])
   })
 
   it('fans an unowned change out to every subscribed session', async () => {

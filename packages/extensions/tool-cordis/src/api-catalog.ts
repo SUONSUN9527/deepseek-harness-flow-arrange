@@ -3519,7 +3519,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'JobHooks',
-    declaration: 'export interface JobHooks {\n    cancel(reason?: string): void;\n    done: Promise<JobOutcome>;\n    readOutput?(): string;\n}',
+    declaration: 'export interface JobHooks {\n    ready?: Promise<void>;\n    cancel(reason?: string): void;\n    done: Promise<JobOutcome>;\n    readOutput?(): string;\n}',
   },
   {
     name: 'JobId',
@@ -3538,6 +3538,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface JobOutcome {\n    status: \'completed\' | \'killed\' | \'failed\';\n    detail?: string;\n    output?: string;\n}',
   },
   {
+    name: 'JobPhase',
+    declaration: 'export type JobPhase = \'provisioning\' | \'running\' | \'stopping\' | \'completed\' | \'killed\' | \'failed\' | \'timeout\' | \'orphaned\';',
+  },
+  {
     name: 'JobRead',
     declaration: 'export interface JobRead {\n    text: string;\n    snapshot: JobSnapshot;\n}',
   },
@@ -3547,7 +3551,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'JobSnapshot',
-    declaration: 'export interface JobSnapshot {\n    id: JobId;\n    kind: JobKind;\n    label: string;\n    outputLimitBytes?: number;\n    ownerSession?: SessionId;\n    status: JobStatus;\n    detail?: string;\n    startedAt: number;\n    finishedAt?: number;\n    reported: boolean;\n}',
+    declaration: 'export interface JobSnapshot {\n    id: JobId;\n    kind: JobKind;\n    label: string;\n    outputLimitBytes?: number;\n    ownerSession?: SessionId;\n    status: JobStatus;\n    phase?: JobPhase;\n    detail?: string;\n    startedAt: number;\n    acceptedAt?: number;\n    runningAt?: number;\n    lastProgressAt?: number;\n    revision?: number;\n    finishedAt?: number;\n    reported: boolean;\n}',
   },
   {
     name: 'JobStart',
